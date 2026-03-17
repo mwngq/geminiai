@@ -1,0 +1,240 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - name: string (required, < 100 chars)
+    //   - email: string (required, valid email)
+    //   - role: string (required, 'student' | 'teacher' | 'admin')
+    //   - status: string (required, 'active' | 'disabled')
+    //   - lastLogin: string (optional)
+    //   - createdAt: string (optional)
+    //
+    // Collection: loginLogs
+    // Document ID: {logId}
+    // Fields:
+    //   - userId: string (required)
+    //   - ip: string (required)
+    //   - time: string (required)
+    //   - status: string (required, 'success' | 'failed')
+    //   - device: string (required)
+    //
+    // Collection: auditLogs
+    // Document ID: {logId}
+    // Fields:
+    //   - userId: string (required)
+    //   - action: string (required)
+    //   - resource: string (required)
+    //   - time: string (required)
+    //   - details: string (required)
+    //
+    // Collection: problems
+    // Document ID: {problemId}
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - difficulty: string (required)
+    //   - markdown: string (required)
+    //   - testCases: list (required)
+    //   - authorId: string (required)
+    //   - createdAt: string (required)
+    //   - updatedAt: string (optional)
+    //
+    // Collection: assignments
+    // Document ID: {assignmentId}
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - problems: list (required)
+    //   - classes: list (required)
+    //   - dueDate: string (required)
+    //   - authorId: string (required)
+    //   - createdAt: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin') ||
+        (request.auth.token.email == "songyutong40@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+    
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+    
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'status']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['student', 'teacher', 'admin'] &&
+             data.status in ['active', 'disabled'] &&
+             (!('lastLogin' in data) || (data.lastLogin is string && data.lastLogin.size() < 100)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() < 100));
+    }
+    
+    function isValidLoginLog(data) {
+      return data.keys().hasAll(['userId', 'ip', 'time', 'status', 'device']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.ip is string && data.ip.size() < 100 &&
+             data.time is string && data.time.size() < 100 &&
+             data.status in ['success', 'failed'] &&
+             data.device is string && data.device.size() < 200;
+    }
+    
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['userId', 'action', 'resource', 'time', 'details']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.action is string && data.action.size() < 200 &&
+             data.resource is string && data.resource.size() < 200 &&
+             data.time is string && data.time.size() < 100 &&
+             data.details is string && data.details.size() < 1000;
+    }
+
+    function isValidProblem(data) {
+      return data.keys().hasAll(['id', 'title', 'difficulty', 'markdown', 'testCases', 'authorId', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.difficulty in ['简单', '中等', '困难', 'Easy', 'Medium', 'Hard'] &&
+             data.markdown is string && data.markdown.size() < 50000 &&
+             data.testCases is list && data.testCases.size() < 100 &&
+             data.authorId is string && data.authorId.size() > 0 && data.authorId.size() < 100 &&
+             data.createdAt is string && data.createdAt.size() < 100 &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() < 100));
+    }
+
+    function isValidAssignment(data) {
+      return data.keys().hasAll(['id', 'title', 'problems', 'classes', 'dueDate', 'authorId', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 5000)) &&
+             data.problems is list && data.problems.size() < 100 &&
+             data.classes is list && data.classes.size() < 100 &&
+             data.dueDate is string && data.dueDate.size() < 100 &&
+             data.authorId is string && data.authorId.size() > 0 && data.authorId.size() < 100 &&
+             data.createdAt is string && data.createdAt.size() < 100;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isAuthenticated() && 
+                       isValidUser(request.resource.data) && 
+                       request.resource.data.uid == userId &&
+                       (
+                         (isOwner(userId) && request.resource.data.role == 'student' && request.resource.data.status == 'active') || 
+                         isAdmin()
+                       );
+                       
+      allow update: if isAuthenticated() && 
+                       isValidUser(request.resource.data) && 
+                       request.resource.data.uid == resource.data.uid &&
+                       (
+                         (isOwner(userId) && request.resource.data.role == resource.data.role && request.resource.data.status == resource.data.status) || 
+                         isAdmin()
+                       );
+                       
+      allow delete: if isAdmin();
+    }
+    
+    match /loginLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && 
+                       isValidLoginLog(request.resource.data) && 
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+    
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && 
+                       isValidAuditLog(request.resource.data) && 
+                       request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /problems/{problemId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                       isValidProblem(request.resource.data) && 
+                       request.resource.data.authorId == request.auth.uid &&
+                       (
+                         isAdmin() || 
+                         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'teacher')
+                       );
+      allow update: if isAuthenticated() && 
+                       isValidProblem(request.resource.data) && 
+                       request.resource.data.authorId == resource.data.authorId &&
+                       (request.auth.uid == resource.data.authorId || isAdmin());
+      allow delete: if isAuthenticated() && 
+                       (request.auth.uid == resource.data.authorId || isAdmin());
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                       isValidAssignment(request.resource.data) && 
+                       request.resource.data.authorId == request.auth.uid &&
+                       (
+                         isAdmin() || 
+                         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'teacher')
+                       );
+      allow update: if isAuthenticated() && 
+                       isValidAssignment(request.resource.data) && 
+                       request.resource.data.authorId == resource.data.authorId &&
+                       (request.auth.uid == resource.data.authorId || isAdmin());
+      allow delete: if isAuthenticated() && 
+                       (request.auth.uid == resource.data.authorId || isAdmin());
+    }
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin() || (
+        isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'teacher'
+      );
+    }
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /submissions/{submissionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+      allow update: if isAuthenticated() && (request.resource.data.studentId == request.auth.uid || isAdmin() || (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'teacher'
+      ));
+      allow delete: if isAdmin();
+    }
+  }
+}

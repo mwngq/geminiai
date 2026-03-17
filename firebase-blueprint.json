@@ -1,0 +1,176 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing role and status.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["student", "teacher", "admin"] },
+        "status": { "type": "string", "enum": ["active", "disabled"] },
+        "lastLogin": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role", "status"]
+    },
+    "Problem": {
+      "title": "Problem",
+      "description": "Programming problem definition.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["简单", "中等", "困难", "Easy", "Medium", "Hard"] },
+        "markdown": { "type": "string" },
+        "testCases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "number" },
+              "input": { "type": "string" },
+              "output": { "type": "string" },
+              "weight": { "type": "number" },
+              "isHidden": { "type": "boolean" }
+            }
+          }
+        },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "difficulty", "markdown", "authorId", "createdAt"]
+    },
+    "Assignment": {
+      "title": "Assignment",
+      "description": "Assignment published by a teacher.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "problems": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "classes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "problems", "classes", "dueDate", "authorId", "createdAt"]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "Student's code submission for a problem.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "problemId": { "type": "string" },
+        "assignmentId": { "type": "string" },
+        "code": { "type": "string" },
+        "language": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "submitted", "graded"] },
+        "score": { "type": "number" },
+        "feedback": { "type": "string" },
+        "submitTime": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "problemId", "code", "language", "status", "submitTime"]
+    },
+    "LoginLog": {
+      "title": "LoginLog",
+      "description": "Record of user login attempts.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "ip": { "type": "string" },
+        "time": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["success", "failed"] },
+        "device": { "type": "string" }
+      },
+      "required": ["userId", "ip", "time", "status", "device"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Record of system actions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "resource": { "type": "string" },
+        "time": { "type": "string", "format": "date-time" },
+        "details": { "type": "string" }
+      },
+      "required": ["userId", "action", "resource", "time", "details"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "Represents a class of students.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "teacherId": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Represents a global configuration setting.",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string" },
+        "allowRegistration": { "type": "boolean" },
+        "defaultRole": { "type": "string" },
+        "maintenanceMode": { "type": "boolean" },
+        "aiEnabled": { "type": "boolean" },
+        "aiModel": { "type": "string" },
+        "maxTokensPerUser": { "type": "number" },
+        "emailNotifications": { "type": "boolean" },
+        "smtpServer": { "type": "string" },
+        "smtpPort": { "type": "number" },
+        "sessionTimeout": { "type": "number" },
+        "requireEmailVerification": { "type": "boolean" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/problems/{problemId}": {
+      "schema": { "$ref": "#/entities/Problem" },
+      "description": "Stores programming problems."
+    },
+    "/assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/Assignment" },
+      "description": "Stores assignments."
+    },
+    "/submissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/Submission" },
+      "description": "Stores student submissions."
+    },
+    "/loginLogs/{logId}": {
+      "schema": { "$ref": "#/entities/LoginLog" },
+      "description": "Stores login logs."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Stores audit logs."
+    },
+    "/classes/{classId}": {
+      "schema": { "$ref": "#/entities/Class" },
+      "description": "Stores classes."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/Setting" },
+      "description": "Stores global settings."
+    }
+  }
+}
